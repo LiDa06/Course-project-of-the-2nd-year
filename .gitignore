@@ -17,6 +17,7 @@
 .vs/
 .vscode/
 .idea/
+.vsconfig
 *.csproj
 *.unityproj
 *.sln
