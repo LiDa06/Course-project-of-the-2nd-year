@@ -30,6 +30,12 @@ namespace Assets.Scripts.UI.Screens
             resendButton.interactable = resendTimer.IsFinished;
         }
 
+        public void OnConfirmClick()
+        {
+            //Реализовать логику проверки кода с сервера
+
+            ScreenRouter.Instance.Show<MainScreen>();
+        }
         public void OnResendClicked()
         {
             if (!resendTimer.IsFinished)

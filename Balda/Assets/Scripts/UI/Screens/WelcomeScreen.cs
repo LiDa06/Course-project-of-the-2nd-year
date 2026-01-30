@@ -12,7 +12,7 @@ namespace Assets.Scripts.UI.Screens
         }
         public void OnGuestClick()
         {
-            throw new NotImplementedException();
+            ScreenRouter.Instance.Show<MainScreen>();
         }
     }
 }

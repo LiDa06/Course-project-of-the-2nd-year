@@ -9,6 +9,11 @@
 [Bb]uilds/
 [Ll]ogs/
 [Mm]emoryCaptures/
+[Uu]serSettings/
+
+# Temporary Unity files
+.utmp/
+App_BackUpThisFolder_ButDontShipItWithYourGame/
 
 # AssetStore tools
 [Aa]ssets/AssetStoreTools*
