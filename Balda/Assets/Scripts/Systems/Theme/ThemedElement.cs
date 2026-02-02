@@ -11,9 +11,7 @@ public enum ThemeColorType
     Accent,
     Cell,
     CellUsed,
-    CellActive,
-    //OutlineDark,
-    //OutlineLight
+    CellActive
 }
 
 public class ThemedElement : MonoBehaviour

@@ -1,11 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Assets.Scripts.Core;
+﻿using Assets.Scripts.Data;
+using Assets.Scripts.App;
 using TMPro;
 using UnityEngine;
+using Assets.Scripts.UI.Screens.Main;
 
 namespace Assets.Scripts.UI.Screens
 {
@@ -17,9 +14,9 @@ namespace Assets.Scripts.UI.Screens
 
         private void OnEnable()
         {
-            email.text = SessionData.Email;
-            dateOfRegistration.text = SessionData.RegistrationDate.ToString();
-            timeInGame.text = SessionData.TimeInGame.ToString();
+            email.text = UserData.Instance.Email;
+            dateOfRegistration.text = UserData.Instance.RegistrationDate.ToString();
+            timeInGame.text = ""; //////////////////////////
         }
         public void OnBack()
         {

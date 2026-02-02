@@ -1,7 +1,9 @@
 ﻿using System;
-using Assets.Scripts.Core;
+using Assets.Scripts.Data;
+using Assets.Scripts.App;
 using TMPro;
 using UnityEngine;
+using Assets.Scripts.UI.Screens.Verification;
 
 namespace Assets.Scripts.UI.Screens
 {
@@ -12,8 +14,8 @@ namespace Assets.Scripts.UI.Screens
 
         public void OnLoginClick()
         {
-            SessionData.Name = nameInput.text;
-            SessionData.Email = emailInput.text;
+            UserData.Instance.Name = nameInput.text;
+            UserData.Instance.Email = emailInput.text;
 
             ScreenRouter.Instance.Show<VerificationScreen>();
         }

@@ -1,10 +1,11 @@
-﻿using Assets.Scripts.Core;
+﻿using Assets.Scripts.Data;
+using Assets.Scripts.App;
 using TMPro;
 using UnityEngine;
-using Assets.Scripts.UI.Screens.VerificationTools;
+using Assets.Scripts.UI.Screens.Main;
 using UnityEngine.UI;
 
-namespace Assets.Scripts.UI.Screens
+namespace Assets.Scripts.UI.Screens.Verification
 {
     public class VerificationScreen : ScreenBase
     {
@@ -16,7 +17,7 @@ namespace Assets.Scripts.UI.Screens
 
         void OnEnable()
         {
-            email.text = SessionData.Email;
+            email.text = UserData.Instance.Name;
 
             confirmButton.interactable = false;
             resendButton.interactable = false;
@@ -45,6 +46,11 @@ namespace Assets.Scripts.UI.Screens
             resendTimer.StartTimer();
 
             // Реализовать логику взаимодействия с сервером
+        }
+
+        public void OnBack()
+        {
+            ScreenRouter.Instance.Show<LoginScreen>();
         }
     }
 }

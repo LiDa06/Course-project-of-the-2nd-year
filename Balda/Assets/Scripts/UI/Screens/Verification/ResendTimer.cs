@@ -2,7 +2,7 @@
 using TMPro;
 using System.Collections;
 
-namespace Assets.Scripts.UI.Screens.VerificationTools
+namespace Assets.Scripts.UI.Screens.Verification
 {
     public class ResendTimer : MonoBehaviour
     {

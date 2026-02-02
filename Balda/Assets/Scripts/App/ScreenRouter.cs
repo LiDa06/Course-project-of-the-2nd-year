@@ -3,15 +3,15 @@ using System;
 using System.Collections.Generic;
 using Assets.Scripts.UI.Screens;
 
-namespace Assets.Scripts.Core
+namespace Assets.Scripts.App
 {
     public class ScreenRouter : MonoBehaviour
     {
         public static ScreenRouter Instance;
 
-        [SerializeField] Transform screensRoot;
+        [SerializeField] Transform screensRoot; 
 
-        Dictionary<Type, ScreenBase> screens = new();
+        private readonly Dictionary<Type, ScreenBase> screens = new();
 
         void Awake()
         {
@@ -22,8 +22,6 @@ namespace Assets.Scripts.Core
                 screens[screen.GetType()] = screen;
                 screen.gameObject.SetActive(false);
             }
-
-            Show<WelcomeScreen>();
         }
 
         public void Show<T>() where T : ScreenBase

@@ -11,7 +11,7 @@ public class ThemeManager : MonoBehaviour
 {
     public static ThemeManager Instance;
 
-    public ThemeType currentTheme = ThemeType.Light;
+    public ThemeType CurrentTheme { get; private set; } = ThemeType.Light;
 
     public static event Action OnThemeChanged;
 
@@ -45,49 +45,47 @@ public class ThemeManager : MonoBehaviour
 
         Instance = this;
         DontDestroyOnLoad(gameObject);
+
+        LoadTheme();
     }
 
-    [Obsolete]
-    private void Start()
+    private void LoadTheme()
     {
-        ApplyThemeToAll();
-    }
-
-    [Obsolete]
-    public void ToggleTheme()
-    {
-        currentTheme = currentTheme == ThemeType.Light
-            ? ThemeType.Dark
-            : ThemeType.Light;
-
-        ApplyThemeToAll();
+        CurrentTheme = (ThemeType)PlayerPrefs.GetInt("Theme", 0);
         OnThemeChanged?.Invoke();
     }
 
-    [Obsolete]
-    public void ApplyThemeToAll()
+    public void SetTheme(ThemeType theme)
     {
-        var elements = FindObjectsOfType<ThemedElement>(true);
-        foreach (var e in elements)
-        {
-            e.ApplyTheme();
-        }
+        if (CurrentTheme == theme)
+            return;
+
+        CurrentTheme = theme;
+        PlayerPrefs.SetInt("Theme", (int)theme);
+        PlayerPrefs.Save();
+
+        OnThemeChanged?.Invoke();
+    }
+
+    public void ToggleTheme()
+    {
+        SetTheme(CurrentTheme == ThemeType.Light
+            ? ThemeType.Dark
+            : ThemeType.Light);
     }
 
     public Color GetColor(ThemeColorType type)
     {
         return type switch
         {
-            ThemeColorType.Paper => currentTheme == ThemeType.Light ? lightPaper : darkPaper,
-            ThemeColorType.Grid => currentTheme == ThemeType.Light ? lightGrid : darkGrid,
-            ThemeColorType.Ink => currentTheme == ThemeType.Light ? lightInk : darkInk,
-            ThemeColorType.InkLight => currentTheme == ThemeType.Light ? lightInkLight : darkInkLight,
-            ThemeColorType.Accent => currentTheme == ThemeType.Light ? lightAccent : darkAccent,
-            ThemeColorType.Cell => currentTheme == ThemeType.Light ? lightCell : darkCell,
-            ThemeColorType.CellUsed => currentTheme == ThemeType.Light ? lightCellUsed : darkCellUsed,
-            ThemeColorType.CellActive => currentTheme == ThemeType.Light ? lightCellActive : darkCellActive,
-            //ThemeColorType.OutlineDark => currentTheme == ThemeType.Light ? lightInk : darkInk,
-            //ThemeColorType.OutlineLight => currentTheme == ThemeType.Light ? lightGrid : darkGrid,
+            ThemeColorType.Paper => CurrentTheme == ThemeType.Light ? lightPaper : darkPaper,
+            ThemeColorType.Grid => CurrentTheme == ThemeType.Light ? lightGrid : darkGrid,
+            ThemeColorType.Ink => CurrentTheme == ThemeType.Light ? lightInk : darkInk,
+            ThemeColorType.InkLight => CurrentTheme == ThemeType.Light ? lightInkLight : darkInkLight,
+            ThemeColorType.Accent => CurrentTheme == ThemeType.Light ? lightAccent : darkAccent,
+            ThemeColorType.Cell => CurrentTheme == ThemeType.Light ? lightCell : darkCell,
+            ThemeColorType.CellUsed => CurrentTheme == ThemeType.Light ? lightCellUsed : darkCellUsed,
+            ThemeColorType.CellActive => CurrentTheme == ThemeType.Light ? lightCellActive : darkCellActive,
             _ => Color.white
         };
     }

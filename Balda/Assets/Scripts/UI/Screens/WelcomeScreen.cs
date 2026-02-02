@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
-using Assets.Scripts.Core;
+using Assets.Scripts.App;
+using Assets.Scripts.UI.Screens.Main;
 using System;
 
 namespace Assets.Scripts.UI.Screens
