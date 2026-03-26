@@ -9,11 +9,11 @@ public enum ThemeType
 
 public class ThemeManager : MonoBehaviour
 {
-    public static ThemeManager Instance;
+    public static ThemeManager Instance { get; private set; }
 
-    public ThemeType CurrentTheme { get; private set; } = ThemeType.Light;
+    public ThemeType CurrentTheme { get; private set; }
 
-    public static event Action OnThemeChanged;
+    public static event Action ThemeChanged;
 
     [Header("Light Theme")]
     public Color lightPaper = new Color32(245, 241, 232, 255);
@@ -45,33 +45,14 @@ public class ThemeManager : MonoBehaviour
 
         Instance = this;
         DontDestroyOnLoad(gameObject);
-
-        LoadTheme();
     }
-
-    private void LoadTheme()
-    {
-        CurrentTheme = (ThemeType)PlayerPrefs.GetInt("Theme", 0);
-        OnThemeChanged?.Invoke();
-    }
-
-    public void SetTheme(ThemeType theme)
+    public void Apply(ThemeType theme)
     {
         if (CurrentTheme == theme)
             return;
 
         CurrentTheme = theme;
-        PlayerPrefs.SetInt("Theme", (int)theme);
-        PlayerPrefs.Save();
-
-        OnThemeChanged?.Invoke();
-    }
-
-    public void ToggleTheme()
-    {
-        SetTheme(CurrentTheme == ThemeType.Light
-            ? ThemeType.Dark
-            : ThemeType.Light);
+        ThemeChanged?.Invoke();
     }
 
     public Color GetColor(ThemeColorType type)

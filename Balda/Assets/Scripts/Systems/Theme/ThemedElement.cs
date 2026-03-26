@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using Unity.VectorGraphics;
 
 public enum ThemeColorType
 {
@@ -20,24 +21,26 @@ public class ThemedElement : MonoBehaviour
 
     private Image image;
     private TMP_Text text;
+    private SVGImage icon;
     private Outline outline;
 
     private void Awake()
     {
         image = GetComponent<Image>();
         text = GetComponent<TMP_Text>();
+        icon = GetComponent<SVGImage>();
         outline = GetComponent<Outline>();
     }
 
     private void OnEnable()
     {
         ApplyTheme();
-        ThemeManager.OnThemeChanged += ApplyTheme;
+        ThemeManager.ThemeChanged += ApplyTheme;
     }
 
     private void OnDisable()
     {
-        ThemeManager.OnThemeChanged -= ApplyTheme;
+        ThemeManager.ThemeChanged -= ApplyTheme;
     }
 
     public void ApplyTheme()
@@ -52,6 +55,9 @@ public class ThemedElement : MonoBehaviour
 
         if (text != null)
             text.color = color;
+
+        if (icon != null)
+            icon.color = color;
 
         if (outline != null)
             outline.effectColor = color;

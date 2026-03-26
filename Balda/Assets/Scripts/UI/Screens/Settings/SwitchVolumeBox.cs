@@ -1,4 +1,6 @@
-﻿using Unity.VectorGraphics;
+﻿using Assets.Scripts.Data;
+using Assets.Scripts.LocalData;
+using Unity.VectorGraphics;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -20,11 +22,43 @@ namespace Assets.Scripts.UI.Screens.Settings
         [SerializeField] private Image onImage;
         [SerializeField] private Image offImage;
 
-        public void Switch(bool isOn)
+        private void OnEnable()
         {
-            handle.anchoredPosition = isOn ? onPosition : offPosition;
-            icon = isOn ? onIcon : offIcon;
-            background = isOn ? onImage : offImage;
+            ApplyFromSettings();
+            AudioManager.AudioChanged += OnAudioChanged;
+        }
+        private void OnDisable()
+        {
+            AudioManager.AudioChanged -= OnAudioChanged;
+        }
+
+        private void ApplyFromSettings()
+        {
+            Apply(LocalSettings.Instance.Audio);
+        }
+
+        public void OnAudioChanged()
+        {
+            Apply(AudioManager.Instance.CurrentAudio);
+        }
+
+        private void Apply(AudioType audio)
+        {
+            bool flag = audio == AudioType.On;
+
+            onImage.enabled = !flag;
+            offImage.enabled = flag;
+            onIcon.enabled = !flag;
+            offIcon.enabled = flag;
+
+            handle.anchoredPosition = flag ? onPosition : offPosition;
+            icon = flag ? onIcon : offIcon;
+            background = flag ? onImage : offImage;
+
+            onImage.enabled = flag;
+            offImage.enabled = !flag;
+            onIcon.enabled = flag;
+            offIcon.enabled = !flag;
         }
     }
 }

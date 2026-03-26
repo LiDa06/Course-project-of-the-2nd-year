@@ -1,5 +1,5 @@
 ﻿using System.Drawing;
-using Assets.Scripts.Data;
+using Assets.Scripts.LocalData;
 using Assets.Scripts.App;
 using TMPro;
 using UnityEngine;
@@ -18,15 +18,24 @@ namespace Assets.Scripts.UI.Screens.Main
         public void OnEnable()
         {
             slider.Start();
-            wins.text = UserData.Instance.Wins.ToString();
-            losses.text = UserData.Instance.Losses.ToString();
-            persent.text = UserData.Instance.GamePlayed == 0 ? "0" : 
-                $"{UserData.Instance.Wins * 100 / (UserData.Instance.GamePlayed)}%";
+            wins.text = LocalPlayerData.Instance.Wins.ToString();
+            losses.text = LocalPlayerData.Instance.Losses.ToString();
+            persent.text = LocalPlayerData.Instance.GamePlayed == 0 ? "0" : 
+                $"{LocalPlayerData.Instance.Wins * 100 / (LocalPlayerData.Instance.GamePlayed)}%";
         }
 
         public void UpdateFieldSize()
         {
-            SettingsData.SetBoardSize(slider.GetFieldSize());
+            //SettingsData.SetBoardSize(slider.GetFieldSize());
+        }
+        public void OnPlayWithFriendClick()
+        {
+            ScreenRouter.Instance.Show<PlayWithFriendScreen>();
+        }
+
+        public void OnRulesClick()
+        {
+            ScreenRouter.Instance.Show<RulesScreen>();
         }
 
         public void OnProfileButtonClick()

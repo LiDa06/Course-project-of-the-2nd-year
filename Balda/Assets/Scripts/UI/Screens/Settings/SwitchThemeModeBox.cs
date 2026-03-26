@@ -1,4 +1,7 @@
-﻿using Unity.VectorGraphics;
+﻿using Assets.Scripts.Data;
+using Assets.Scripts.LocalData;
+using TMPro;
+using Unity.VectorGraphics;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UI;
@@ -21,11 +24,47 @@ namespace Assets.Scripts.UI.Screens.Settings
         [SerializeField] private Image onImage;
         [SerializeField] private Image offImage;
 
-        public void Switch(bool isOn)
+        [SerializeField] private TMP_Text text;
+
+        private void OnEnable()
         {
-            handle.anchoredPosition = isOn ? onPosition : offPosition;
-            icon = isOn ? onIcon : offIcon;
-            background = isOn ? onImage : offImage;
+            ApplyFromSettings();
+            ThemeManager.ThemeChanged += OnThemeChanged;
+        }
+        private void OnDisable()
+        {
+            ThemeManager.ThemeChanged -= OnThemeChanged;
+        }
+
+        private void ApplyFromSettings()
+        {
+            Apply(LocalSettings.Instance.Theme);
+        }
+
+        public void OnThemeChanged()
+        {
+            Apply(ThemeManager.Instance.CurrentTheme);
+        }
+
+        private void Apply(ThemeType theme)
+        {
+            bool flag = theme == ThemeType.Dark;
+
+            onImage.enabled = !flag;
+            offImage.enabled = flag;
+            onIcon.enabled = !flag;
+            offIcon.enabled = flag;
+
+            handle.anchoredPosition = flag ? onPosition : offPosition;
+            icon = flag ? onIcon : offIcon;
+            background = flag ? onImage : offImage;
+
+            onImage.enabled = flag;
+            offImage.enabled = !flag;
+            onIcon.enabled = flag;
+            offIcon.enabled = !flag;
+
+            text.text = flag ? "Включена" : "Выключена";
         }
     }
 }

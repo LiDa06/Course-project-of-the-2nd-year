@@ -43,6 +43,15 @@ namespace Assets.Scripts.UI.Screens.Verification
             return code;
         }
 
+        public void Clear()
+        {
+            foreach (var input in inputs)
+                input.text = "";
+
+            if (inputs.Length > 0)
+                inputs[0].ActivateInputField();
+        }
+
         public bool IsCodeLengthCorrect()
         {
             return GetCode().Length == inputs.Length;

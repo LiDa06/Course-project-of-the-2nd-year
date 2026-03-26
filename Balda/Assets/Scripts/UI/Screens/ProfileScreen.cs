@@ -1,4 +1,4 @@
-﻿using Assets.Scripts.Data;
+﻿using Assets.Scripts.LocalData;
 using Assets.Scripts.App;
 using TMPro;
 using UnityEngine;
@@ -14,8 +14,8 @@ namespace Assets.Scripts.UI.Screens
 
         private void OnEnable()
         {
-            email.text = UserData.Instance.Email;
-            dateOfRegistration.text = UserData.Instance.RegistrationDate.ToString();
+            email.text = LocalPlayerData.Instance.Email;
+            dateOfRegistration.text = LocalPlayerData.Instance.CreatedAtTicks.ToString();
             timeInGame.text = ""; //////////////////////////
         }
         public void OnBack()

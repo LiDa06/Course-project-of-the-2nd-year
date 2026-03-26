@@ -44,12 +44,11 @@ ScriptedImporter:
       pivot: {x: 0, y: 0}
       alignment: 0
       border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
       rect:
         serializedVersion: 2
         x: 0
         y: 0
         width: 0
         height: 0
-      spriteID: 06bd393fed5a4ce40b142c6f014fd5b6
+      spriteID: a4c8b5312ff99c743ad816f2f57d2bd6
     PhysicsOutlines: []
