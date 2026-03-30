@@ -1,49 +1,129 @@
 ﻿using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using Balda.Features.Game.Domain;
 
 namespace Balda.Features.Game.UI
 {
-    public class BoardCellView : MonoBehaviour
+    public class BoardCellView : MonoBehaviour, IPointerClickHandler
     {
-        [SerializeField] private Button button;
         [SerializeField] private TMP_Text letterText;
         [SerializeField] private Image background;
+
+        [Header("Colors")]
+        [SerializeField] private Color normalColor = Color.white;
+        [SerializeField] private Color startLetterColor = new Color(0.92f, 0.92f, 0.92f, 1f);
+        [SerializeField] private Color selectedColor = new Color(0.72f, 0.88f, 1f, 1f);
+        [SerializeField] private Color placedLetterColor = new Color(0.95f, 0.87f, 0.53f, 1f);
 
         public int Row { get; private set; }
         public int Col { get; private set; }
 
-        public char Letter { get; private set; } = '\0';
-        public bool IsBlocked { get; private set; }
+        public string Letter { get; private set; } = "";
+        public bool IsStartLetter { get; private set; }
 
-        private System.Action<BoardCellView> onClicked;
+        private bool isInteractable = true;
+        private System.Action<int, int> onClicked;
 
-        public void Init(int row, int col, System.Action<BoardCellView> clickCallback)
+        private void Awake()
+        {
+            var rootImage = GetComponent<Image>();
+            if (rootImage != null)
+                rootImage.raycastTarget = true;
+
+            if (letterText != null)
+                letterText.raycastTarget = false;
+
+            if (background != null)
+                background.raycastTarget = false;
+
+            var childImages = GetComponentsInChildren<Image>(true);
+            for (int i = 0; i < childImages.Length; i++)
+            {
+                if (childImages[i].gameObject != gameObject)
+                    childImages[i].raycastTarget = false;
+            }
+        }
+
+        public void Init(int row, int col, System.Action<int, int> clickCallback)
         {
             Row = row;
             Col = col;
             onClicked = clickCallback;
 
-            button.onClick.RemoveAllListeners();
-            button.onClick.AddListener(() => onClicked?.Invoke(this));
-
-            SetLetter('\0', false);
+            Clear();
         }
 
-        public void SetLetter(char letter, bool isBlocked)
+        public void Render(BoardCellData data)
         {
-            Letter = letter;
-            IsBlocked = isBlocked;
+            if (data == null)
+            {
+                Clear();
+                return;
+            }
 
-            if (letter == '\0')
-                letterText.text = "";
-            else
-                letterText.text = char.ToUpperInvariant(letter).ToString();
+            Letter = data.Letter ?? "";
+            IsStartLetter = data.IsStartLetter;
+
+            if (letterText != null)
+                letterText.text = Letter;
+
+            ApplyVisual(false, false);
+        }
+
+        public void SetInteractable(bool value)
+        {
+            isInteractable = value;
         }
 
         public bool IsEmpty()
         {
-            return Letter == '\0';
+            return string.IsNullOrEmpty(Letter);
+        }
+
+        public void SetSelectionState(bool isSelected, bool isPlacedLetterCell)
+        {
+            ApplyVisual(isSelected, isPlacedLetterCell);
+        }
+
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            if (!isInteractable)
+                return;
+
+            onClicked?.Invoke(Row, Col);
+        }
+
+        private void ApplyVisual(bool isSelected, bool isPlacedLetterCell)
+        {
+            if (background == null)
+                return;
+
+            if (isPlacedLetterCell)
+            {
+                background.color = placedLetterColor;
+                return;
+            }
+
+            if (isSelected)
+            {
+                background.color = selectedColor;
+                return;
+            }
+
+            background.color = IsStartLetter ? startLetterColor : normalColor;
+        }
+
+        private void Clear()
+        {
+            Letter = "";
+            IsStartLetter = false;
+
+            if (letterText != null)
+                letterText.text = "";
+
+            ApplyVisual(false, false);
         }
     }
 }

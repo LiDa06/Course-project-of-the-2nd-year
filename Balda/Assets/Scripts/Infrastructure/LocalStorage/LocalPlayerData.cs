@@ -32,38 +32,123 @@ namespace Balda.Infrastructure.LocalStorage
 
         public static void Load()
         {
-            if (File.Exists(FilePath))
+            try
             {
-                var json = File.ReadAllText(FilePath);
-                Instance = JsonUtility.FromJson<LocalPlayerData>(json);
+                if (File.Exists(FilePath))
+                {
+                    var json = File.ReadAllText(FilePath);
+                    Instance = JsonUtility.FromJson<LocalPlayerData>(json);
+
+                    if (Instance == null)
+                    {
+                        Instance = CreateDefault();
+                        Save();
+                    }
+                }
+                else
+                {
+                    Instance = CreateDefault();
+                    Save();
+                }
             }
-            else
+            catch (Exception ex)
             {
-                Instance = new LocalPlayerData();
+                Debug.LogWarning("LocalPlayerData.Load failed: " + ex.Message);
+                Instance = CreateDefault();
                 Save();
             }
         }
 
         public static void Save()
         {
-            Instance ??= new LocalPlayerData();
+            Instance ??= CreateDefault();
 
             var json = JsonUtility.ToJson(Instance, true);
             File.WriteAllText(FilePath, json);
         }
 
-        public DateTime GetCreatedAtUtc() => new DateTime(CreatedAtTicks, DateTimeKind.Utc);
+        public static void ResetToGuest()
+        {
+            Instance = CreateDefault();
+            Save();
+        }
+
+        private static LocalPlayerData CreateDefault()
+        {
+            return new LocalPlayerData
+            {
+                IsGuest = true,
+                IsFirstLaunch = true,
+                LocalDisplayName = "Guest",
+                Email = "",
+                CloudUserId = "",
+                CreatedAtTicks = DateTime.UtcNow.Ticks,
+                Wins = 0,
+                Losses = 0,
+                GamePlayed = 0,
+                WordsMadeUp = 0,
+                AverageWordLen = 0,
+                LongestWord = 0,
+                SeriesOfVictories = 0,
+                PointsForAllTime = 0
+            };
+        }
+
+        public DateTime GetCreatedAtUtc()
+        {
+            return new DateTime(CreatedAtTicks, DateTimeKind.Utc);
+        }
+
+        public void SetGuest(string guestName = "Guest")
+        {
+            IsGuest = true;
+            CloudUserId = "";
+            Email = "";
+            LocalDisplayName = string.IsNullOrWhiteSpace(guestName) ? "Guest" : guestName;
+            Save();
+        }
 
         public void MarkAsCloudUser(Guid userId, string username, string email)
         {
             IsGuest = false;
+            IsFirstLaunch = false;
             CloudUserId = userId.ToString();
-            LocalDisplayName = username;
-            Email = email;
+            LocalDisplayName = string.IsNullOrWhiteSpace(username) ? LocalDisplayName : username;
+            Email = email ?? "";
+            Save();
         }
-        public static void ResetToGuest()
+
+        public void UpdateDisplayName(string newName)
         {
-            Instance = new LocalPlayerData();
+            if (!string.IsNullOrWhiteSpace(newName))
+            {
+                LocalDisplayName = newName.Trim();
+                Save();
+            }
+        }
+
+        public void UpdateEmail(string newEmail)
+        {
+            Email = string.IsNullOrWhiteSpace(newEmail) ? "" : newEmail.Trim();
+            Save();
+        }
+
+        public void MarkFirstLaunchCompleted()
+        {
+            IsFirstLaunch = false;
+            Save();
+        }
+
+        public void ResetStats()
+        {
+            Wins = 0;
+            Losses = 0;
+            GamePlayed = 0;
+            WordsMadeUp = 0;
+            AverageWordLen = 0;
+            LongestWord = 0;
+            SeriesOfVictories = 0;
+            PointsForAllTime = 0;
             Save();
         }
     }

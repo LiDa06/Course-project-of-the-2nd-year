@@ -1,12 +1,13 @@
-﻿using UnityEngine;
+﻿using System;
+using System.Collections.Generic;
+using UnityEngine;
 using UnityEngine.UI;
-using Balda.Infrastructure.LocalStorage;
+using Balda.Features.Game.Domain;
 
 namespace Balda.Features.Game.UI
 {
     public class BoardManager : MonoBehaviour
     {
-        private int boardSize;
         private const float Spacing = 20f;
 
         [Header("References")]
@@ -17,47 +18,100 @@ namespace Balda.Features.Game.UI
         [Header("Layout")]
         [SerializeField, Range(0.6f, 1f)] private float widthPercent = 0.9f;
 
+        private int boardSize;
         private BoardCellView[,] cells;
+        private BoardState currentBoard;
 
-        private void Awake()
-        {
-            if (LocalSettings.Instance == null)
-                LocalSettings.Load();
-        }
-
-        private void OnEnable()
-        {
-            BuildBoard();
-        }
+        public event Action<int, int> CellClicked;
 
         private void OnRectTransformDimensionsChange()
         {
-            if (!Application.isPlaying || boardArea == null || gridLayout == null)
+            if (!Application.isPlaying || boardArea == null || gridLayout == null || boardSize <= 0)
                 return;
 
             ApplyBoardWidth();
             UpdateGridCellSize();
         }
 
-        public void BuildBoard()
+        public void BuildBoard(BoardState boardState)
         {
-            if (LocalSettings.Instance == null)
-                LocalSettings.Load();
+            if (boardState == null)
+            {
+                Debug.LogError("BoardManager.BuildBoard: boardState is null.");
+                return;
+            }
 
-            boardSize = Mathf.Clamp(LocalSettings.Instance.BoardSize, 5, 10);
+            currentBoard = boardState;
+            boardSize = boardState.Size;
 
             ClearOldCells();
             ApplyBoardWidth();
             ConfigureGrid();
             CreateCells();
+            Render(boardState);
+        }
 
-            Debug.Log($"BuildBoard -> boardSize = {boardSize}");
+        public void Render(BoardState boardState)
+        {
+            if (boardState == null || cells == null)
+                return;
+
+            currentBoard = boardState;
+
+            for (int row = 0; row < boardState.Size; row++)
+            {
+                for (int col = 0; col < boardState.Size; col++)
+                {
+                    var cellData = boardState.GetCell(row, col);
+                    cells[row, col].Render(cellData);
+                }
+            }
+        }
+
+        public void RefreshSelection(IReadOnlyList<BoardPosition> selectedPath, int placedRow, int placedCol, bool hasPlacedCell)
+        {
+            if (cells == null)
+                return;
+
+            for (int row = 0; row < boardSize; row++)
+            {
+                for (int col = 0; col < boardSize; col++)
+                {
+                    bool isSelected = Contains(selectedPath, row, col);
+                    bool isPlacedLetterCell = hasPlacedCell && row == placedRow && col == placedCol;
+
+                    cells[row, col].SetSelectionState(isSelected, isPlacedLetterCell);
+                }
+            }
+        }
+
+        public BoardCellView GetCellView(int row, int col)
+        {
+            if (cells == null || row < 0 || row >= boardSize || col < 0 || col >= boardSize)
+                return null;
+
+            return cells[row, col];
+        }
+
+        private bool Contains(IReadOnlyList<BoardPosition> path, int row, int col)
+        {
+            if (path == null)
+                return false;
+
+            for (int i = 0; i < path.Count; i++)
+            {
+                if (path[i].Row == row && path[i].Col == col)
+                    return true;
+            }
+
+            return false;
         }
 
         private void ApplyBoardWidth()
         {
             RectTransform parent = boardArea.parent as RectTransform;
-            if (parent == null) return;
+            if (parent == null)
+                return;
 
             float targetWidth = parent.rect.width * widthPercent;
             boardArea.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, targetWidth);
@@ -75,7 +129,7 @@ namespace Balda.Features.Game.UI
 
         private void UpdateGridCellSize()
         {
-            float boardWidth = boardArea.rect.width - 50;
+            float boardWidth = boardArea.rect.width - Spacing;
             float totalSpacing = Spacing * (boardSize - 1);
             float cellSize = (boardWidth - totalSpacing) / boardSize;
 
@@ -92,7 +146,7 @@ namespace Balda.Features.Game.UI
                 {
                     BoardCellView cell = Instantiate(cellPrefab, gridLayout.transform);
                     cell.name = $"Cell_{row}_{col}";
-                    cell.Init(row, col, OnCellClicked);
+                    cell.Init(row, col, OnCellClickedInternal);
                     cells[row, col] = cell;
                 }
             }
@@ -106,9 +160,9 @@ namespace Balda.Features.Game.UI
             }
         }
 
-        private void OnCellClicked(BoardCellView cell)
+        private void OnCellClickedInternal(int row, int col)
         {
-            Debug.Log($"Clicked: [{cell.Row}, {cell.Col}]");
+            CellClicked?.Invoke(row, col);
         }
     }
 }
