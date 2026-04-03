@@ -20,13 +20,29 @@ namespace Balda.Features.Game.SaveLoad
                 Difficulty = session.Difficulty ?? "easy",
                 BoardSize = session.BoardSize,
                 BoardJson = session.Board != null ? JsonUtility.ToJson(session.Board) : "",
+                PlayerOneDisplayName = session.PlayerOneDisplayName ?? "",
+                PlayerTwoDisplayName = session.PlayerTwoDisplayName ?? "",
+                StartWord = session.StartWord ?? "",
+                PlayerOneType = session.PlayerOneType.ToString(),
+                PlayerTwoType = session.PlayerTwoType.ToString(),
                 CurrentPlayerIndex = session.CurrentPlayerIndex,
                 PlayerOneScore = session.PlayerOneScore,
                 PlayerTwoScore = session.PlayerTwoScore,
+                TurnNumber = session.TurnNumber,
                 UsedWords = session.UsedWords != null
                     ? new List<string>(session.UsedWords)
                     : new List<string>(),
+                MoveHistory = session.MoveHistory != null
+                    ? new List<GameMoveRecord>(session.MoveHistory)
+                    : new List<GameMoveRecord>(),
                 IsFinished = session.IsFinished,
+                WinnerIndex = session.WinnerIndex,
+                StartedAtTicks = session.StartedAtTicks,
+                FinishedAtTicks = session.FinishedAtTicks,
+                LastAcceptedWord = session.LastAcceptedWord ?? "",
+                LastAcceptedScore = session.LastAcceptedScore,
+                ResultApplied = session.ResultApplied,
+                Phase = session.Phase.ToString(),
                 SavedAtTicks = DateTime.UtcNow.Ticks
             };
         }
@@ -62,13 +78,29 @@ namespace Balda.Features.Game.SaveLoad
                 Board = board,
                 Mode = ParseMode(save.Mode),
                 Difficulty = string.IsNullOrWhiteSpace(save.Difficulty) ? "easy" : save.Difficulty,
+                PlayerOneDisplayName = save.PlayerOneDisplayName ?? "",
+                PlayerTwoDisplayName = save.PlayerTwoDisplayName ?? "",
+                StartWord = save.StartWord ?? "",
+                PlayerOneType = ParseParticipantType(save.PlayerOneType, ParticipantType.Human),
+                PlayerTwoType = ParseParticipantType(save.PlayerTwoType, ParticipantType.Bot),
                 CurrentPlayerIndex = save.CurrentPlayerIndex,
                 PlayerOneScore = save.PlayerOneScore,
                 PlayerTwoScore = save.PlayerTwoScore,
+                TurnNumber = save.TurnNumber <= 0 ? 1 : save.TurnNumber,
                 UsedWords = save.UsedWords != null
                     ? new List<string>(save.UsedWords)
                     : new List<string>(),
-                IsFinished = save.IsFinished
+                MoveHistory = save.MoveHistory != null
+                    ? new List<GameMoveRecord>(save.MoveHistory)
+                    : new List<GameMoveRecord>(),
+                IsFinished = save.IsFinished,
+                WinnerIndex = save.WinnerIndex,
+                StartedAtTicks = save.StartedAtTicks > 0 ? save.StartedAtTicks : DateTime.UtcNow.Ticks,
+                FinishedAtTicks = save.FinishedAtTicks,
+                LastAcceptedWord = save.LastAcceptedWord ?? "",
+                LastAcceptedScore = save.LastAcceptedScore,
+                ResultApplied = save.ResultApplied,
+                Phase = ParsePhase(save.Phase, save.IsFinished)
             };
         }
 
@@ -97,6 +129,29 @@ namespace Balda.Features.Game.SaveLoad
                 "online" => GameMode.Online,
                 _ => GameMode.Solo
             };
+        }
+
+        private static GamePhase ParsePhase(string value, bool isFinished)
+        {
+            if (isFinished)
+                return GamePhase.Finished;
+
+            if (string.IsNullOrWhiteSpace(value))
+                return GamePhase.WaitingForLetter;
+
+            return Enum.TryParse(value, true, out GamePhase parsed)
+                ? parsed
+                : GamePhase.WaitingForLetter;
+        }
+
+        private static ParticipantType ParseParticipantType(string value, ParticipantType fallback)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return fallback;
+
+            return Enum.TryParse(value, true, out ParticipantType parsed)
+                ? parsed
+                : fallback;
         }
     }
 }

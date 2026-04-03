@@ -6,9 +6,10 @@ namespace Balda.Features.Game.Rules
 {
     public class WordDictionaryService
     {
-        private const string MainDictionaryResourcePath = "Dictionaries/ru_words_9960_utf8_upper";
+        private const string MainDictionaryResourcePath = "Dictionaries/ru_words";
 
         private readonly HashSet<string> words = new(StringComparer.OrdinalIgnoreCase);
+        private readonly List<string> orderedWords = new();
         private bool isLoaded;
 
         public bool Contains(string word)
@@ -20,6 +21,12 @@ namespace Balda.Features.Game.Rules
                 return false;
 
             return words.Contains(normalized);
+        }
+
+        public IReadOnlyList<string> GetAllWords()
+        {
+            EnsureLoaded();
+            return orderedWords;
         }
 
         public string Normalize(string value)
@@ -52,8 +59,11 @@ namespace Balda.Features.Game.Rules
             for (int i = 0; i < lines.Length; i++)
             {
                 string word = Normalize(lines[i]);
-                if (!string.IsNullOrWhiteSpace(word))
-                    words.Add(word);
+                if (string.IsNullOrWhiteSpace(word))
+                    continue;
+
+                if (words.Add(word))
+                    orderedWords.Add(word);
             }
 
             Debug.Log($"WordDictionaryService: загружено слов: {words.Count}");

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 
@@ -26,6 +27,9 @@ namespace Balda.Infrastructure.LocalStorage
         public int LongestWord = 0;
         public int SeriesOfVictories = 0;
         public int PointsForAllTime = 0;
+        public int TotalLettersInAcceptedWords = 0;
+
+        public List<RecentGameInfo> RecentGames = new();
 
         private static string FilePath =>
             Path.Combine(Application.persistentDataPath, "local_player_data.json");
@@ -44,6 +48,8 @@ namespace Balda.Infrastructure.LocalStorage
                         Instance = CreateDefault();
                         Save();
                     }
+
+                    Instance.RecentGames ??= new List<RecentGameInfo>();
                 }
                 else
                 {
@@ -62,6 +68,7 @@ namespace Balda.Infrastructure.LocalStorage
         public static void Save()
         {
             Instance ??= CreateDefault();
+            Instance.RecentGames ??= new List<RecentGameInfo>();
 
             var json = JsonUtility.ToJson(Instance, true);
             File.WriteAllText(FilePath, json);
@@ -90,7 +97,9 @@ namespace Balda.Infrastructure.LocalStorage
                 AverageWordLen = 0,
                 LongestWord = 0,
                 SeriesOfVictories = 0,
-                PointsForAllTime = 0
+                PointsForAllTime = 0,
+                TotalLettersInAcceptedWords = 0,
+                RecentGames = new List<RecentGameInfo>()
             };
         }
 
@@ -139,6 +148,18 @@ namespace Balda.Infrastructure.LocalStorage
             Save();
         }
 
+        public void AddRecentGame(RecentGameInfo game)
+        {
+            if (game == null)
+                return;
+
+            RecentGames ??= new List<RecentGameInfo>();
+            RecentGames.Insert(0, game);
+
+            while (RecentGames.Count > 3)
+                RecentGames.RemoveAt(RecentGames.Count - 1);
+        }
+
         public void ResetStats()
         {
             Wins = 0;
@@ -149,6 +170,8 @@ namespace Balda.Infrastructure.LocalStorage
             LongestWord = 0;
             SeriesOfVictories = 0;
             PointsForAllTime = 0;
+            TotalLettersInAcceptedWords = 0;
+            RecentGames = new List<RecentGameInfo>();
             Save();
         }
     }

@@ -6,7 +6,7 @@ namespace Balda.Features.Game.Rules
 {
     public class StartWordProvider
     {
-        private const string StartWordsResourcePath = "Dictionaries/ru_start_words_5_10_utf8_upper";
+        private const string StartWordsResourcePath = "Dictionaries/ru_start_words_5_10";
 
         private readonly WordDictionaryService dictionaryService;
 
