@@ -9,6 +9,7 @@ namespace Balda.Infrastructure.LocalStorage
         public string Mode = "solo";
         public int BoardSize = 5;
         public string Result = "draw"; // win, loss, draw
+        public string OpponentName = "";
         public int PlayerOneScore = 0;
         public int PlayerTwoScore = 0;
         public int TurnCount = 0;

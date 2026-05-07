@@ -29,7 +29,7 @@ namespace Balda.Features.Game.UI
             if (closeButton != null)
                 closeButton.onClick.AddListener(HandleClose);
 
-            HideImmediate();
+            //HideImmediate();
         }
 
         public void Show(Action continueCallback, Action newGameCallback, Action closeCallback = null)

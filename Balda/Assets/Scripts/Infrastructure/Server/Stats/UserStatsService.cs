@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
-using Balda.Infrastructure.Server.Models;
 using Balda.Infrastructure.LocalStorage;
+using Balda.Infrastructure.Server.Models;
 
 namespace Balda.Infrastructure.Server.Stats
 {
@@ -38,7 +38,8 @@ namespace Balda.Infrastructure.Server.Stats
                 AverageWordLen = 0,
                 LongestWord = 0,
                 SeriesOfVictories = 0,
-                PointsForAllTime = 0
+                PointsForAllTime = 0,
+                TotalLettersInAcceptedWords = 0
             };
 
             var response = await _client
@@ -50,7 +51,47 @@ namespace Balda.Infrastructure.Server.Stats
 
         public async Task<bool> UpdateAsync(UserStatsEntity stats)
         {
+            if (stats == null)
+                return false;
+
             await _client.From<UserStatsEntity>().Update(stats);
+            return true;
+        }
+
+        public async Task<bool> SaveFromLocalAsync(Guid userId, LocalPlayerData local)
+        {
+            if (local == null)
+                return false;
+
+            var stats = await GetByUserIdAsync(userId);
+            bool needsInsert = stats == null;
+
+            if (stats == null)
+            {
+                stats = new UserStatsEntity
+                {
+                    UserId = userId,
+                    CreatedAt = DateTime.UtcNow
+                };
+            }
+
+            stats.Wins = local.Wins;
+            stats.Losses = local.Losses;
+            stats.GamePlayed = local.GamePlayed;
+            stats.WordsMadeUp = local.WordsMadeUp;
+            stats.AverageWordLen = local.AverageWordLen;
+            stats.LongestWord = local.LongestWord;
+            stats.PointsForAllTime = local.PointsForAllTime;
+            stats.TotalLettersInAcceptedWords = local.TotalLettersInAcceptedWords;
+
+            if (stats.CreatedAt == default)
+                stats.CreatedAt = DateTime.UtcNow;
+
+            if (needsInsert)
+                await _client.From<UserStatsEntity>().Insert(stats);
+            else
+                await _client.From<UserStatsEntity>().Update(stats);
+
             return true;
         }
 
@@ -58,7 +99,10 @@ namespace Balda.Infrastructure.Server.Stats
         {
             var stats = await GetByUserIdAsync(userId);
             if (stats == null)
-                return false;
+            {
+                stats = await CreateDefaultAsync(userId);
+                return stats != null;
+            }
 
             stats.Wins = 0;
             stats.Losses = 0;
@@ -68,6 +112,7 @@ namespace Balda.Infrastructure.Server.Stats
             stats.LongestWord = 0;
             stats.SeriesOfVictories = 0;
             stats.PointsForAllTime = 0;
+            stats.TotalLettersInAcceptedWords = 0;
 
             await _client.From<UserStatsEntity>().Update(stats);
             return true;
@@ -75,36 +120,34 @@ namespace Balda.Infrastructure.Server.Stats
 
         public async Task MergeGuestProgressAsync(Guid userId, LocalPlayerData local)
         {
-            var stats = await GetByUserIdAsync(userId);
-            if (stats == null)
+            if (local == null)
                 return;
 
-            int oldGames = stats.GamePlayed;
-            int localGames = local.GamePlayed;
+            var stats = await GetByUserIdAsync(userId);
+            if (stats == null)
+                stats = await CreateDefaultAsync(userId);
+
+            if (stats == null)
+                return;
 
             stats.Wins += local.Wins;
             stats.Losses += local.Losses;
             stats.GamePlayed += local.GamePlayed;
             stats.WordsMadeUp += local.WordsMadeUp;
             stats.PointsForAllTime += local.PointsForAllTime;
-            stats.SeriesOfVictories = Math.Max(stats.SeriesOfVictories, local.SeriesOfVictories);
+            stats.TotalLettersInAcceptedWords += local.TotalLettersInAcceptedWords;
             stats.LongestWord = Math.Max(stats.LongestWord, local.LongestWord);
 
-            if (oldGames == 0 && localGames > 0)
-            {
-                stats.AverageWordLen = local.AverageWordLen;
-            }
-            else if (localGames > 0)
-            {
-                int totalGames = oldGames + localGames;
-                int weighted =
-                    (stats.AverageWordLen * oldGames) +
-                    (local.AverageWordLen * localGames);
-
-                stats.AverageWordLen = totalGames == 0 ? 0 : weighted / totalGames;
-            }
+            stats.AverageWordLen = stats.WordsMadeUp > 0
+                ? RoundToInt((float)stats.TotalLettersInAcceptedWords / stats.WordsMadeUp)
+                : 0;
 
             await UpdateAsync(stats);
+        }
+
+        private static int RoundToInt(float value)
+        {
+            return (int)Math.Round(value, MidpointRounding.AwayFromZero);
         }
     }
 }

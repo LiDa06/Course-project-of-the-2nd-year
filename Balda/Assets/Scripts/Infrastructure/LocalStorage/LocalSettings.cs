@@ -13,6 +13,7 @@ namespace Balda.Infrastructure.LocalStorage
         public AudioType Audio = AudioType.On;
         public ThemeType Theme = ThemeType.Light;
         public int BoardSize = 5;
+        public string BotDifficulty = "easy";
 
         private static string FilePath =>
             Path.Combine(Application.persistentDataPath, "local_settings_data.json");
@@ -62,7 +63,8 @@ namespace Balda.Infrastructure.LocalStorage
             {
                 Audio = AudioType.On,
                 Theme = ThemeType.Light,
-                BoardSize = 5
+                BoardSize = 5,
+                BotDifficulty = "easy"
             };
         }
     }

@@ -41,6 +41,31 @@ namespace Balda.Infrastructure.Server.Profile
             return ParseBooleanResponse(result?.Content);
         }
 
+        public async Task<bool?> IsActiveEmailRegisteredPublicAsync(string email)
+        {
+            var normalized = NormalizeEmail(email);
+            if (string.IsNullOrWhiteSpace(normalized))
+                return false;
+
+            var payload = new Dictionary<string, object>
+            {
+                ["p_email"] = normalized
+            };
+
+            try
+            {
+                var result = await _client.Rpc("is_active_email_registered", payload);
+                return ParseBooleanResponse(result?.Content);
+            }
+            catch (Exception ex)
+            {
+                // Если RPC ещё не создан в Supabase, не ломаем вход:
+                // Supabase Auth всё равно вернёт ошибку, которую обработает маппер.
+                UnityEngine.Debug.LogWarning("IsActiveEmailRegisteredPublicAsync failed: " + ex.Message);
+                return null;
+            }
+        }
+
         public async Task<bool> EnsureProfileAndStatsAsync(string username)
         {
             var normalized = NormalizeUsername(username);
@@ -87,11 +112,26 @@ namespace Balda.Infrastructure.Server.Profile
 
             profile.IsDeleted = true;
             profile.DeletedAt = DateTime.UtcNow;
-            profile.Username = null;
-            profile.Email = null;
 
+            // В твоей таблице profiles.username имеет ограничение NOT NULL,
+            // поэтому при soft delete нельзя записывать null.
+            // Ставим техническое уникальное имя, чтобы старый логин освободился,
+            // а ограничение NOT NULL не нарушалось.
+            profile.Username = BuildDeletedUsername(userId);
+
+            // Email не очищаем: Supabase Auth-пользователь при soft delete остаётся в auth.users,
+            // поэтому эта почта фактически всё ещё занята. Если очистить зеркало email,
+            // регистрация на тот же адрес будет выглядеть свободной в profiles, но упадёт в Auth.
             await _client.From<ProfileEntity>().Update(profile);
             return true;
+        }
+
+        private static string BuildDeletedUsername(Guid userId)
+        {
+            // Короткое значение, чтобы не упереться в возможное ограничение длины username.
+            // Пример: del_a1b2c3d4e5f6
+            var compactId = userId.ToString("N");
+            return "del_" + compactId.Substring(0, 12);
         }
 
         private static string NormalizeUsername(string username)

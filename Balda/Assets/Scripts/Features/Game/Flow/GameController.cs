@@ -39,7 +39,15 @@ namespace Balda.Features.Game.Flow
         private WordValidationService wordValidationService;
         private GameEndService gameEndService;
         private LocalMatchStatsService localMatchStatsService;
+        private CloudMatchStatsSyncService cloudMatchStatsSyncService;
+        private WordSuggestionService wordSuggestionService;
+
+        public Action<string> WordSuggestionRequested;
+        public Action<string> GameMessageRequested;
+
         private IBotMoveProvider easyBotMoveProvider;
+        private IBotMoveProvider mediumBotMoveProvider;
+        private IBotMoveProvider hardBotMoveProvider;
 
         public GameSession CurrentSession => currentSession;
         public bool HasActiveDraft => currentDraft != null && currentDraft.IsActive;
@@ -60,9 +68,14 @@ namespace Balda.Features.Game.Flow
             wordDictionaryService = new WordDictionaryService();
             startWordProvider = new StartWordProvider(wordDictionaryService);
             wordValidationService = new WordValidationService(wordDictionaryService);
-            gameEndService = new GameEndService();
+            gameEndService = new GameEndService(wordDictionaryService);
             localMatchStatsService = new LocalMatchStatsService();
+            cloudMatchStatsSyncService = new CloudMatchStatsSyncService();
+            wordSuggestionService = new WordSuggestionService();
+
             easyBotMoveProvider = new EasyBotMoveProvider(wordDictionaryService);
+            mediumBotMoveProvider = new MediumBotMoveProvider(wordDictionaryService);
+            hardBotMoveProvider = new HardBotMoveProvider(wordDictionaryService);
 
             currentDraft = new TurnDraft();
         }
@@ -99,6 +112,27 @@ namespace Balda.Features.Game.Flow
             SaveNow();
         }
 
+        private IBotMoveProvider GetCurrentBotMoveProvider()
+        {
+            if (currentSession == null)
+                return easyBotMoveProvider;
+
+            if (string.IsNullOrWhiteSpace(currentSession.Difficulty))
+                return easyBotMoveProvider;
+
+            switch (currentSession.Difficulty.Trim().ToLowerInvariant())
+            {
+                case "medium":
+                    return mediumBotMoveProvider;
+
+                case "hard":
+                    return hardBotMoveProvider;
+
+                default:
+                    return easyBotMoveProvider;
+            }
+        }
+
         public void InitializeForScreen()
         {
             StopBotTurnRoutine();
@@ -119,7 +153,7 @@ namespace Balda.Features.Game.Flow
             if (TryLoadSavedGame())
                 return;
 
-            Debug.LogWarning("Сохранённая игра не найдена или повреждена. Начинаю новую.");
+            ShowGameWarning("Сохранённая игра не найдена или повреждена. Начинаю новую.");
             StartFreshGame();
         }
 
@@ -185,19 +219,19 @@ namespace Balda.Features.Game.Flow
 
             if (currentDraft == null || !currentDraft.IsActive)
             {
-                Debug.LogWarning("Сначала поставьте новую букву.");
+                ShowGameWarning("Сначала поставьте новую букву.");
                 return false;
             }
 
             if (currentDraft.SelectedPath == null || currentDraft.SelectedPath.Count == 0)
             {
-                Debug.LogWarning("Проведи пальцем по буквам, чтобы собрать слово.");
+                ShowGameWarning("Проведите пальцем по буквам, чтобы собрать слово.");
                 return false;
             }
 
             if (!currentDraft.ContainsPosition(currentDraft.Row, currentDraft.Col))
             {
-                Debug.LogWarning("Слово должно проходить через новую букву.");
+                ShowGameWarning("Слово должно проходить через новую букву.");
                 return false;
             }
 
@@ -208,7 +242,13 @@ namespace Balda.Features.Game.Flow
 
             if (!validation.IsValid)
             {
-                Debug.LogWarning(validation.Message);
+                ShowGameWarning(validation.Message);
+
+                if (validation.Reason == WordValidationService.FailureReason.NotInDictionary)
+                {
+                    WordSuggestionRequested?.Invoke(currentDraft.CandidateWord);
+                }
+
                 return false;
             }
 
@@ -417,17 +457,34 @@ namespace Balda.Features.Game.Flow
 
         private GameSession CreateNewSession(int boardSize)
         {
+            var startOptions = GameStartOptionsHolder.Current ?? new GameStartOptions();
+
+            int resolvedBoardSize = startOptions.BoardSize > 0
+                ? startOptions.BoardSize
+                : boardSize;
+
+            string difficulty = startOptions.BotDifficulty.ToString().ToLowerInvariant();
+
             var session = new GameSession
             {
                 SessionId = Guid.NewGuid().ToString(),
-                BoardSize = boardSize,
-                Board = new BoardState(boardSize),
-                Mode = GameMode.Solo,
-                Difficulty = "easy",
-                PlayerOneDisplayName = GetLocalPlayerDisplayName(),
-                PlayerTwoDisplayName = BuildSecondPlayerDisplayName(GameMode.Solo, "easy"),
+                BoardSize = resolvedBoardSize,
+                Board = new BoardState(resolvedBoardSize),
+
+                Mode = startOptions.Mode,
+                Difficulty = difficulty,
+
+                PlayerOneDisplayName = string.IsNullOrWhiteSpace(startOptions.PlayerOneName)
+                    ? GetLocalPlayerDisplayName()
+                    : startOptions.PlayerOneName,
+
+                PlayerTwoDisplayName = BuildSecondPlayerDisplayName(startOptions),
+
                 PlayerOneType = ParticipantType.Human,
-                PlayerTwoType = ParticipantType.Bot,
+                PlayerTwoType = startOptions.Mode == GameMode.Solo
+                    ? ParticipantType.Bot
+                    : ParticipantType.Human,
+
                 CurrentPlayerIndex = 0,
                 PlayerOneScore = 0,
                 PlayerTwoScore = 0,
@@ -444,13 +501,14 @@ namespace Balda.Features.Game.Flow
                 Phase = GamePhase.WaitingForLetter
             };
 
-            string startWord = wordDictionaryService.Normalize(startWordProvider.GetStartWord(boardSize));
+            string startWord = wordDictionaryService.Normalize(startWordProvider.GetStartWord(resolvedBoardSize));
             session.StartWord = startWord;
             session.Board.PlaceStartWord(startWord);
+
             EnsureStartWordInUsedWords(session);
             EnsureMoveHistoryInitialized(session);
 
-            Debug.Log($"Новая игра создана. Размер поля: {boardSize}. Стартовое слово: {startWord}");
+            Debug.Log($"Новая игра создана. Размер поля: {resolvedBoardSize}. Режим: {session.Mode}. Сложность: {session.Difficulty}. Стартовое слово: {startWord}");
 
             return session;
         }
@@ -480,9 +538,13 @@ namespace Balda.Features.Game.Flow
                 session.PlayerOneType = ParticipantType.Human;
                 session.PlayerTwoType = ParticipantType.Bot;
             }
-            else if (session.PlayerOneType == ParticipantType.Bot)
+            else
             {
-                session.PlayerOneType = ParticipantType.Human;
+                if (session.PlayerOneType == ParticipantType.Bot)
+                    session.PlayerOneType = ParticipantType.Human;
+
+                if (session.PlayerTwoType == ParticipantType.Bot)
+                    session.PlayerTwoType = ParticipantType.Human;
             }
         }
 
@@ -568,6 +630,26 @@ namespace Balda.Features.Game.Flow
             };
         }
 
+        private static string BuildSecondPlayerDisplayName(GameStartOptions options)
+        {
+            if (options == null)
+                return "Игрок 2";
+
+            return options.Mode switch
+            {
+                GameMode.Solo => options.BotDifficulty switch
+                {
+                    BotDifficulty.Easy => "Бот (лёгкий)",
+                    BotDifficulty.Medium => "Бот (средний)",
+                    BotDifficulty.Hard => "Бот (сложный)",
+                    _ => "Бот (лёгкий)"
+                },
+                GameMode.LocalVersus => string.IsNullOrWhiteSpace(options.PlayerTwoName) ? "Игрок 2" : options.PlayerTwoName,
+                GameMode.Online => string.IsNullOrWhiteSpace(options.PlayerTwoName) ? "Соперник" : options.PlayerTwoName,
+                _ => "Игрок 2"
+            };
+        }
+
         private static string GetDifficultyLabel(string difficulty)
         {
             if (string.IsNullOrWhiteSpace(difficulty))
@@ -587,33 +669,43 @@ namespace Balda.Features.Game.Flow
             if (currentSession == null || currentSession.Board == null)
                 return;
 
-            if (currentSession.IsFinished || currentSession.Phase == GamePhase.Finished || currentSession.Phase == GamePhase.BotTurn)
+            if (currentSession.IsFinished || currentSession.Phase == GamePhase.Finished)
                 return;
+
+            if (currentSession.Phase == GamePhase.BotTurn)
+            {
+                ShowGameMessage("Дождитесь хода бота.");
+                return;
+            }
 
             if (currentDraft != null && currentDraft.IsActive)
             {
-                Debug.Log("Сначала подтверди слово или отмени текущий ход.");
+                ShowGameWarning("Сначала подтвердите слово или отмените текущий ход.");
                 return;
             }
 
             if (currentSession.Phase != GamePhase.WaitingForLetter)
+            {
+                ShowGameWarning("Сейчас нельзя поставить букву. Завершите текущий ход или отмените его.");
                 return;
+            }
 
             if (!gameRules.CanPlaceNewLetter(currentSession, row, col))
             {
-                Debug.Log($"Нельзя поставить букву в [{row}, {col}]");
+                ShowGameWarning("Выберите свободную клетку рядом с уже стоящей буквой.");
                 return;
             }
 
             if (letterInputPopup == null)
             {
+                ShowGameWarning("Не удалось открыть окно ввода буквы.");
                 Debug.LogError("GameController: LetterInputPopup reference is missing.");
                 return;
             }
 
             letterInputPopup.Show(
                 confirmCallback: letter => ConfirmLetterPlacement(row, col, letter),
-                cancelCallback: () => Debug.Log("Выбор буквы отменён."));
+                cancelCallback: () => ShowGameMessage("Выбор буквы отменён."));
         }
 
         private void ConfirmLetterPlacement(int row, int col, string letter)
@@ -630,7 +722,7 @@ namespace Balda.Features.Game.Flow
             string normalizedLetter = wordDictionaryService.Normalize(letter);
             if (string.IsNullOrWhiteSpace(normalizedLetter) || normalizedLetter.Length != 1)
             {
-                Debug.LogWarning("Некорректная буква.");
+                ShowGameWarning("Введите одну русскую букву.");
                 return;
             }
 
@@ -646,7 +738,7 @@ namespace Balda.Features.Game.Flow
             NotifyCandidateWordChanged();
             NotifySessionChanged();
 
-            Debug.Log("Буква поставлена. Теперь проведи пальцем по буквам и собери слово.");
+            ShowGameMessage("Буква поставлена. Проведите пальцем по буквам и соберите слово.");
         }
 
         private void ApplyConfirmedWord(string normalizedWord)
@@ -693,7 +785,7 @@ namespace Balda.Features.Game.Flow
             NotifyCandidateWordChanged();
             NotifySessionChanged();
 
-            Debug.Log($"Слово принято: {normalizedWord}. Очки: {score}");
+            ShowGameMessage($"Слово принято: {normalizedWord} (+{score})");
 
             if (gameEndService.ShouldFinish(currentSession))
             {
@@ -751,14 +843,16 @@ namespace Balda.Features.Game.Flow
             if (currentSession == null || currentSession.IsFinished || !currentSession.IsCurrentTurnBot)
                 yield break;
 
-            if (easyBotMoveProvider != null && easyBotMoveProvider.TryFindMove(currentSession, out BotMove move))
+            IBotMoveProvider botMoveProvider = GetCurrentBotMoveProvider();
+
+            if (botMoveProvider != null && botMoveProvider.TryFindMove(currentSession, out BotMove move))
             {
                 yield return PlayBotMovePreviewRoutine(move);
                 ApplyBotMove(move);
             }
             else
             {
-                Debug.Log("Бот не нашёл допустимый ход. Игра завершается.");
+                ShowGameMessage("Бот не нашёл допустимый ход. Игра завершается.");
                 FinishGame();
             }
         }
@@ -800,7 +894,8 @@ namespace Balda.Features.Game.Flow
 
             if (!currentSession.Board.CanPlaceNewLetter(move.Row, move.Col) && currentSession.Board.GetCell(move.Row, move.Col).Letter != wordDictionaryService.Normalize(move.Letter))
             {
-                Debug.LogWarning("EasyBot: выбрана недопустимая клетка. Игра завершается.");
+                ShowGameWarning("Игра завершается: бот выбрал недопустимый ход.");
+                Debug.LogWarning("Bot: выбрана недопустимая клетка. Игра завершается.");
                 FinishGame();
                 return;
             }
@@ -810,7 +905,8 @@ namespace Balda.Features.Game.Flow
 
             if (string.IsNullOrWhiteSpace(normalizedLetter) || normalizedLetter.Length != 1 || string.IsNullOrWhiteSpace(normalizedWord))
             {
-                Debug.LogWarning("EasyBot: найден некорректный ход. Игра завершается.");
+                ShowGameWarning("Игра завершается: бот сделал некорректный ход.");
+                Debug.LogWarning("Bot: найден некорректный ход. Игра завершается.");
                 FinishGame();
                 return;
             }
@@ -845,6 +941,7 @@ namespace Balda.Features.Game.Flow
             {
                 localMatchStatsService.ApplyFinishedMatch(currentSession);
                 currentSession.ResultApplied = true;
+                TrySyncFinishedMatchStatsToCloud();
             }
 
             GameSaveService.DeleteSave();
@@ -857,6 +954,16 @@ namespace Balda.Features.Game.Flow
             NotifyCandidateWordChanged();
             NotifySessionChanged();
             GameFinished?.Invoke(currentSession);
+        }
+
+        private async void TrySyncFinishedMatchStatsToCloud()
+        {
+            if (cloudMatchStatsSyncService == null)
+                return;
+
+            bool synced = await cloudMatchStatsSyncService.TrySyncAsync();
+            if (synced)
+                Debug.Log("GameController: статистика и последние игры синхронизированы с сервером.");
         }
 
         private void RefreshCandidateWordFromSelection()
@@ -1040,6 +1147,24 @@ namespace Balda.Features.Game.Flow
             currentDraft.Clear();
         }
 
+        private void ShowGameMessage(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+                return;
+
+            GameMessageRequested?.Invoke(message);
+            Debug.Log(message);
+        }
+
+        private void ShowGameWarning(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+                return;
+
+            GameMessageRequested?.Invoke(message);
+            Debug.LogWarning(message);
+        }
+
         private void NotifyDraftStateChanged()
         {
             DraftStateChanged?.Invoke(HasActiveDraft);
@@ -1061,6 +1186,32 @@ namespace Balda.Features.Game.Flow
                 LocalSettings.Load();
 
             return Mathf.Clamp(LocalSettings.Instance.BoardSize, 5, 10);
+        }
+
+        public List<string> GetUsedWordsSnapshot()
+        {
+            var result = new List<string>();
+
+            if (currentSession == null || currentSession.UsedWords == null)
+                return result;
+
+            for (int i = 0; i < currentSession.UsedWords.Count; i++)
+            {
+                string word = currentSession.UsedWords[i];
+                if (!string.IsNullOrWhiteSpace(word))
+                    result.Add(word.Trim());
+            }
+
+            return result;
+        }
+
+        public void SaveWordSuggestion(string word)
+        {
+            if (wordSuggestionService == null)
+                return;
+
+            wordSuggestionService.SaveSuggestion(word, currentSession);
+            ShowGameMessage("Слово отправлено на рассмотрение.");
         }
     }
 }

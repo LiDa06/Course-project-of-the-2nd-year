@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using Balda.Features.Game.Domain;
+using Balda.Infrastructure.Theme;
 
 namespace Balda.Features.Game.UI
 {
@@ -10,12 +11,6 @@ namespace Balda.Features.Game.UI
     {
         [SerializeField] private TMP_Text letterText;
         [SerializeField] private Image background;
-
-        [Header("Colors")]
-        [SerializeField] private Color normalColor = Color.white;
-        [SerializeField] private Color startLetterColor = new Color(0.92f, 0.92f, 0.92f, 1f);
-        [SerializeField] private Color selectedColor = new Color(0.72f, 0.88f, 1f, 1f);
-        [SerializeField] private Color placedLetterColor = new Color(0.95f, 0.87f, 0.53f, 1f);
 
         public int Row { get; private set; }
         public int Col { get; private set; }
@@ -25,6 +20,9 @@ namespace Balda.Features.Game.UI
 
         private bool isInteractable = true;
         private System.Action<int, int> onClicked;
+
+        private bool isSelected;
+        private bool isPlacedLetterCell;
 
         private void Awake()
         {
@@ -44,6 +42,17 @@ namespace Balda.Features.Game.UI
                 if (childImages[i].gameObject != gameObject)
                     childImages[i].raycastTarget = false;
             }
+        }
+
+        private void OnEnable()
+        {
+            ThemeManager.ThemeChanged += ApplyTheme;
+            ApplyTheme();
+        }
+
+        private void OnDisable()
+        {
+            ThemeManager.ThemeChanged -= ApplyTheme;
         }
 
         public void Init(int row, int col, System.Action<int, int> clickCallback)
@@ -69,7 +78,9 @@ namespace Balda.Features.Game.UI
             if (letterText != null)
                 letterText.text = Letter;
 
-            ApplyVisual(false, false);
+            isSelected = false;
+            isPlacedLetterCell = false;
+            ApplyTheme();
         }
 
         public void SetInteractable(bool value)
@@ -82,9 +93,11 @@ namespace Balda.Features.Game.UI
             return string.IsNullOrEmpty(Letter);
         }
 
-        public void SetSelectionState(bool isSelected, bool isPlacedLetterCell)
+        public void SetSelectionState(bool selected, bool placedLetterCell)
         {
-            ApplyVisual(isSelected, isPlacedLetterCell);
+            isSelected = selected;
+            isPlacedLetterCell = placedLetterCell;
+            ApplyTheme();
         }
 
         public void OnPointerClick(PointerEventData eventData)
@@ -95,35 +108,45 @@ namespace Balda.Features.Game.UI
             onClicked?.Invoke(Row, Col);
         }
 
-        private void ApplyVisual(bool isSelected, bool isPlacedLetterCell)
+        private void ApplyTheme()
         {
+            if (ThemeManager.Instance == null)
+                return;
+
+            if (letterText != null)
+                letterText.color = ThemeManager.Instance.GetColor(ThemeColorType.Ink);
+
             if (background == null)
                 return;
 
             if (isPlacedLetterCell)
             {
-                background.color = placedLetterColor;
+                background.color = ThemeManager.Instance.GetColor(ThemeColorType.CellActive);
                 return;
             }
 
             if (isSelected)
             {
-                background.color = selectedColor;
+                background.color = ThemeManager.Instance.GetColor(ThemeColorType.CellActive);
                 return;
             }
 
-            background.color = IsStartLetter ? startLetterColor : normalColor;
+            background.color = IsStartLetter
+                ? ThemeManager.Instance.GetColor(ThemeColorType.CellUsed)
+                : ThemeManager.Instance.GetColor(ThemeColorType.Cell);
         }
 
         private void Clear()
         {
             Letter = "";
             IsStartLetter = false;
+            isSelected = false;
+            isPlacedLetterCell = false;
 
             if (letterText != null)
                 letterText.text = "";
 
-            ApplyVisual(false, false);
+            ApplyTheme();
         }
     }
 }

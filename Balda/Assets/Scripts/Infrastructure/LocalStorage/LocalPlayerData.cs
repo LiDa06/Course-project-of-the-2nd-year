@@ -25,9 +25,9 @@ namespace Balda.Infrastructure.LocalStorage
         public int WordsMadeUp = 0;
         public int AverageWordLen = 0;
         public int LongestWord = 0;
-        public int SeriesOfVictories = 0;
         public int PointsForAllTime = 0;
         public int TotalLettersInAcceptedWords = 0;
+        public bool HasUnsyncedStats = false;
 
         public List<RecentGameInfo> RecentGames = new();
 
@@ -96,9 +96,9 @@ namespace Balda.Infrastructure.LocalStorage
                 WordsMadeUp = 0,
                 AverageWordLen = 0,
                 LongestWord = 0,
-                SeriesOfVictories = 0,
                 PointsForAllTime = 0,
                 TotalLettersInAcceptedWords = 0,
+                HasUnsyncedStats = false,
                 RecentGames = new List<RecentGameInfo>()
             };
         }
@@ -168,10 +168,10 @@ namespace Balda.Infrastructure.LocalStorage
             WordsMadeUp = 0;
             AverageWordLen = 0;
             LongestWord = 0;
-            SeriesOfVictories = 0;
             PointsForAllTime = 0;
             TotalLettersInAcceptedWords = 0;
             RecentGames = new List<RecentGameInfo>();
+            HasUnsyncedStats = !IsGuest && !string.IsNullOrWhiteSpace(CloudUserId);
             Save();
         }
     }

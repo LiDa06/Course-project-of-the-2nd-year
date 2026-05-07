@@ -21,19 +21,30 @@ namespace Balda.Features.Game.Services
             playerData.GamePlayed++;
             playerData.PointsForAllTime += session.PlayerOneScore;
 
-            int matchWordCount = session.UsedWords?.Count ?? 0;
-            playerData.WordsMadeUp += matchWordCount;
-
+            int matchWordCount = 0;
             int longestWordInMatch = 0;
             int totalLettersInMatch = 0;
             string bestWord = "";
+
+            string startWord = (session.StartWord ?? "").Trim().ToLowerInvariant();
 
             if (session.UsedWords != null)
             {
                 for (int i = 0; i < session.UsedWords.Count; i++)
                 {
-                    string word = session.UsedWords[i] ?? "";
-                    int length = word.Trim().Length;
+                    string word = (session.UsedWords[i] ?? "").Trim();
+                    if (string.IsNullOrWhiteSpace(word))
+                        continue;
+
+                    if (!string.IsNullOrWhiteSpace(startWord) &&
+                        string.Equals(word, startWord, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    matchWordCount++;
+
+                    int length = word.Length;
                     totalLettersInMatch += length;
 
                     if (length > longestWordInMatch)
@@ -43,6 +54,8 @@ namespace Balda.Features.Game.Services
                     }
                 }
             }
+
+            playerData.WordsMadeUp += matchWordCount;
 
             playerData.TotalLettersInAcceptedWords += totalLettersInMatch;
             playerData.AverageWordLen = playerData.WordsMadeUp > 0
@@ -56,14 +69,11 @@ namespace Balda.Features.Game.Services
             {
                 case 0:
                     playerData.Wins++;
-                    playerData.SeriesOfVictories++;
                     break;
                 case 1:
                     playerData.Losses++;
-                    playerData.SeriesOfVictories = 0;
                     break;
                 default:
-                    playerData.SeriesOfVictories = 0;
                     break;
             }
 
@@ -73,12 +83,15 @@ namespace Balda.Features.Game.Services
                 Mode = ToModeString(session.Mode),
                 BoardSize = session.BoardSize,
                 Result = ToResultString(session.WinnerIndex),
+                OpponentName = GetOpponentName(session),
                 PlayerOneScore = session.PlayerOneScore,
                 PlayerTwoScore = session.PlayerTwoScore,
                 TurnCount = session.TurnNumber,
                 BestWord = bestWord,
                 DurationSeconds = CalculateDurationSeconds(session)
             });
+
+            playerData.HasUnsyncedStats = !playerData.IsGuest && !string.IsNullOrWhiteSpace(playerData.CloudUserId);
 
             LocalPlayerData.Save();
         }
@@ -117,6 +130,38 @@ namespace Balda.Features.Game.Services
         private static int MathfRoundToInt(float value)
         {
             return (int)Math.Round(value, MidpointRounding.AwayFromZero);
+        }
+
+        private static string GetOpponentName(GameSession session)
+        {
+            if (session == null)
+                return "Соперник";
+
+            if (!string.IsNullOrWhiteSpace(session.PlayerTwoDisplayName))
+                return session.PlayerTwoDisplayName;
+
+            return session.Mode switch
+            {
+                GameMode.Solo => BuildBotName(session.Difficulty),
+                GameMode.LocalVersus => "Игрок 2",
+                GameMode.Online => "Соперник",
+                _ => "Соперник"
+            };
+        }
+
+        private static string BuildBotName(string difficulty)
+        {
+            string label = string.IsNullOrWhiteSpace(difficulty)
+                ? "лёгкий"
+                : difficulty.Trim().ToLowerInvariant() switch
+                {
+                    "easy" => "лёгкий",
+                    "medium" => "средний",
+                    "hard" => "сложный",
+                    _ => "лёгкий"
+                };
+
+            return $"Бот ({label})";
         }
     }
 }

@@ -36,5 +36,8 @@ namespace Balda.Infrastructure.Server.Models
 
         [Column("points_for_all_time")]
         public int PointsForAllTime { get; set; }
+
+        [Column("total_letters_in_accepted_words")]
+        public int TotalLettersInAcceptedWords { get; set; }
     }
 }

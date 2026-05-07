@@ -1,4 +1,5 @@
-﻿using Balda.Core.Navigation;
+﻿using System.Collections;
+using Balda.Core.Navigation;
 using Balda.Features.Game.Domain;
 using Balda.Features.Game.Flow;
 using Balda.Features.MainMenu.UI;
@@ -24,6 +25,13 @@ namespace Balda.Features.Game.UI
         [SerializeField] private SavedGamePromptPopup savedGamePromptPopup;
         [SerializeField] private GameResultPopup gameResultPopup;
         [SerializeField] private GameHistoryPopup gameHistoryPopup;
+        [SerializeField] private Button usedWordsButton;
+        [SerializeField] private UsedWordsPopup usedWordsPopup;
+        [SerializeField] private SuggestWordPopup suggestWordPopup;
+        [SerializeField] private TMP_Text gameMessageText;
+        [SerializeField] private float gameMessageVisibleSeconds = 3.5f;
+
+        private Coroutine clearGameMessageRoutine;
 
         private void OnEnable()
         {
@@ -54,12 +62,33 @@ namespace Balda.Features.Game.UI
             gameController.HistoryViewClosed -= OnHistoryViewClosed;
             gameController.HistoryViewClosed += OnHistoryViewClosed;
 
+            gameController.WordSuggestionRequested -= OnWordSuggestionRequested;
+            gameController.WordSuggestionRequested += OnWordSuggestionRequested;
+
+            gameController.GameMessageRequested -= OnGameMessageRequested;
+            gameController.GameMessageRequested += OnGameMessageRequested;
+
+            ClearGameMessage();
+
+            if (suggestWordPopup != null)
+                suggestWordPopup.Hide();
+
             if (historyButton != null)
             {
                 historyButton.onClick.RemoveListener(OnOpenHistory);
                 historyButton.onClick.AddListener(OnOpenHistory);
                 historyButton.gameObject.SetActive(false);
             }
+
+            if (usedWordsButton != null)
+            {
+                usedWordsButton.onClick.RemoveListener(OnOpenUsedWords);
+                usedWordsButton.onClick.AddListener(OnOpenUsedWords);
+                usedWordsButton.gameObject.SetActive(false);
+            }
+
+            if (usedWordsPopup != null)
+                usedWordsPopup.Hide();
 
             if (gameResultPopup != null)
                 gameResultPopup.Hide();
@@ -79,6 +108,9 @@ namespace Balda.Features.Game.UI
             if (historyButton != null)
                 historyButton.onClick.RemoveListener(OnOpenHistory);
 
+            if (usedWordsButton != null)
+                usedWordsButton.onClick.RemoveListener(OnOpenUsedWords);
+
             if (gameController != null)
             {
                 gameController.DraftStateChanged -= OnDraftStateChanged;
@@ -88,6 +120,8 @@ namespace Balda.Features.Game.UI
                 gameController.GameFinished -= OnGameFinished;
                 gameController.HistoryEntryChanged -= OnHistoryEntryChanged;
                 gameController.HistoryViewClosed -= OnHistoryViewClosed;
+                gameController.WordSuggestionRequested -= OnWordSuggestionRequested;
+                gameController.GameMessageRequested -= OnGameMessageRequested;
             }
         }
 
@@ -122,6 +156,7 @@ namespace Balda.Features.Game.UI
         {
             RefreshSessionInfo(session);
             RefreshHistoryButton(session);
+            RefreshUsedWordsButton(session);
         }
 
         private void OnGameFinished(GameSession session)
@@ -129,6 +164,7 @@ namespace Balda.Features.Game.UI
             RefreshSessionInfo(session);
             RefreshHistoryButton(session);
             ShowFinishPanel(session);
+            RefreshUsedWordsButton(session);
         }
 
         private void OnHistoryEntryChanged(GameMoveRecord entry, int index, int totalCount)
@@ -220,7 +256,7 @@ namespace Balda.Features.Game.UI
                 if (string.IsNullOrWhiteSpace(session.LastAcceptedWord))
                     lastWordText.text = "Последнее слово: - ";
                 else
-                    lastWordText.text = $"Последнее слово: { session.LastAcceptedWord} (+{ session.LastAcceptedScore})";
+                    lastWordText.text = $"Последнее слово: {session.LastAcceptedWord} (+{session.LastAcceptedScore})";
             }
         }
 
@@ -267,6 +303,14 @@ namespace Balda.Features.Game.UI
             if (gameHistoryPopup != null)
                 gameHistoryPopup.Hide();
 
+            if (usedWordsPopup != null)
+                usedWordsPopup.Hide();
+
+            if (suggestWordPopup != null)
+                suggestWordPopup.Hide();
+
+            ClearGameMessage();
+
             gameController?.CloseHistoryView();
             gameController?.SaveNow();
             ScreenRouter.Instance.Show<MainScreen>();
@@ -279,6 +323,14 @@ namespace Balda.Features.Game.UI
 
             if (gameHistoryPopup != null)
                 gameHistoryPopup.Hide();
+
+            if (usedWordsPopup != null)
+                usedWordsPopup.Hide();
+
+            if (suggestWordPopup != null)
+                suggestWordPopup.Hide();
+
+            ClearGameMessage();
 
             gameController?.CloseHistoryView();
             gameController?.StartFreshGame();
@@ -294,9 +346,95 @@ namespace Balda.Features.Game.UI
             gameController?.CancelCurrentDraft();
         }
 
+        private void OnGameMessageRequested(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                ClearGameMessage();
+                return;
+            }
+
+            if (gameMessageText == null)
+            {
+                Debug.Log(message);
+                return;
+            }
+
+            gameMessageText.gameObject.SetActive(true);
+            gameMessageText.text = message;
+
+            if (clearGameMessageRoutine != null)
+                StopCoroutine(clearGameMessageRoutine);
+
+            clearGameMessageRoutine = StartCoroutine(ClearGameMessageAfterDelay());
+        }
+
+        private IEnumerator ClearGameMessageAfterDelay()
+        {
+            float delay = Mathf.Max(0.5f, gameMessageVisibleSeconds);
+            yield return new WaitForSeconds(delay);
+            clearGameMessageRoutine = null;
+            ClearGameMessage();
+        }
+
+        private void ClearGameMessage()
+        {
+            if (clearGameMessageRoutine != null)
+            {
+                StopCoroutine(clearGameMessageRoutine);
+                clearGameMessageRoutine = null;
+            }
+
+            if (gameMessageText != null)
+            {
+                gameMessageText.text = string.Empty;
+                gameMessageText.gameObject.SetActive(false);
+            }
+        }
+
         private static string GetSafeName(string value, string fallback)
         {
             return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+        }
+
+        private void RefreshUsedWordsButton(GameSession session)
+        {
+            if (usedWordsButton == null)
+                return;
+
+            bool shouldShow = session != null
+                              && session.UsedWords != null
+                              && session.UsedWords.Count > 0;
+
+            usedWordsButton.gameObject.SetActive(shouldShow);
+            usedWordsButton.interactable = shouldShow;
+        }
+
+        private void OnOpenUsedWords()
+        {
+            if (usedWordsPopup == null || gameController == null)
+                return;
+
+            var words = gameController.GetUsedWordsSnapshot();
+            usedWordsPopup.Show(words);
+        }
+
+        private void OnWordSuggestionRequested(string word)
+        {
+            if (suggestWordPopup == null || gameController == null)
+                return;
+
+            suggestWordPopup.Show(
+                word,
+                onSubmit: suggestedWord =>
+                {
+                    gameController.SaveWordSuggestion(suggestedWord);
+                    suggestWordPopup.Hide();
+                },
+                onCancel: () =>
+                {
+                    suggestWordPopup.Hide();
+                });
         }
     }
 }

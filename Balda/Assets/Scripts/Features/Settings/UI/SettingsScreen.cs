@@ -2,6 +2,7 @@
 using Balda.Core.Navigation;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 using Balda.Infrastructure.LocalStorage;
 using Balda.Infrastructure.Audio;
 using Balda.Infrastructure.Theme;
@@ -15,9 +16,27 @@ namespace Balda.Features.Settings.UI
 {
     public class SettingsScreen : ScreenBase
     {
+        [Header("Common settings")]
         [SerializeField] private SwitchThemeModeBox themeModeBox;
         [SerializeField] private SwitchVolumeBox volumeBox;
+        [SerializeField] private TMP_Dropdown botDifficultyDropdown;
+
+        [Header("Account info")]
         [SerializeField] private TMP_Text nameText;
+        [SerializeField] private TMP_Text accountHintText;
+
+        [Header("Account buttons")]
+        [SerializeField] private Button changeNameButton;
+        [SerializeField] private Button changeEmailButton;
+        [SerializeField] private Button resetStatisticButton;
+        [SerializeField] private Button deleteAccountButton;
+
+        [Header("Overlay / popups")]
+        [SerializeField] private GameObject busyOverlay;
+        [SerializeField] private MessagePopup messagePopup;
+        [SerializeField] private ConfirmationPopup confirmationPopup;
+
+        private bool _busy;
 
         private void OnEnable()
         {
@@ -27,8 +46,100 @@ namespace Balda.Features.Settings.UI
             if (LocalSettings.Instance == null)
                 LocalSettings.Load();
 
+            if (messagePopup != null)
+                messagePopup.Hide();
+
+            if (confirmationPopup != null)
+                confirmationPopup.Hide();
+
+            SetBusy(false);
+            RefreshAccountView();
+            SetupDifficultyDropdown();
+        }
+
+        private void RefreshAccountView()
+        {
+            var local = LocalPlayerData.Instance;
+            bool registered = HasLocalRegisteredAccount();
+
             if (nameText != null)
-                nameText.text = LocalPlayerData.Instance.LocalDisplayName;
+            {
+                string displayName = local != null && !string.IsNullOrWhiteSpace(local.LocalDisplayName)
+                    ? local.LocalDisplayName
+                    : "Guest";
+
+                nameText.text = displayName;
+            }
+
+            if (accountHintText != null)
+            {
+                accountHintText.gameObject.SetActive(!registered);
+                accountHintText.text = "В гостевом режиме доступны игра и локальная статистика. " +
+                                       "Смена имени, почты и удаление аккаунта доступны после регистрации.";
+            }
+
+            ApplyButtonAvailability();
+        }
+
+        private void ApplyButtonAvailability()
+        {
+            bool registered = HasLocalRegisteredAccount();
+
+            if (changeNameButton != null)
+                changeNameButton.interactable = !_busy /*&& registered*/;
+
+            if (changeEmailButton != null)
+                changeEmailButton.interactable = !_busy /*&& registered*/;
+
+            // Сброс статистики доступен и гостю, и зарегистрированному пользователю:
+            // у гостя сбрасываются локальные данные, у аккаунта — локальные + серверные через код.
+            if (resetStatisticButton != null)
+                resetStatisticButton.interactable = !_busy;
+
+            if (deleteAccountButton != null)
+                deleteAccountButton.interactable = !_busy /*&& registered*/;
+        }
+
+        private static bool HasLocalRegisteredAccount()
+        {
+            var local = LocalPlayerData.Instance;
+
+            bool hasLocalAccount =
+                local != null &&
+                !string.IsNullOrWhiteSpace(local.CloudUserId) &&
+                !string.IsNullOrWhiteSpace(local.Email);
+
+            bool hasAuthSession =
+                AuthServiceProvider.Auth != null &&
+                AuthServiceProvider.Auth.IsSignedIn;
+
+            return hasLocalAccount || hasAuthSession;
+        }
+
+        private void SetupDifficultyDropdown()
+        {
+            if (botDifficultyDropdown == null)
+                return;
+
+            botDifficultyDropdown.onValueChanged.RemoveListener(OnBotDifficultyChanged);
+
+            if (botDifficultyDropdown.options == null || botDifficultyDropdown.options.Count == 0)
+            {
+                botDifficultyDropdown.ClearOptions();
+                botDifficultyDropdown.AddOptions(new System.Collections.Generic.List<string>
+                {
+                    "Лёгкий",
+                    "Средний",
+                    "Сложный"
+                });
+            }
+
+            int index = GetDifficultyIndex(LocalSettings.Instance != null
+                ? LocalSettings.Instance.BotDifficulty
+                : "easy");
+
+            botDifficultyDropdown.SetValueWithoutNotify(index);
+            botDifficultyDropdown.onValueChanged.AddListener(OnBotDifficultyChanged);
         }
 
         public void ThemeModeClick()
@@ -67,87 +178,296 @@ namespace Balda.Features.Settings.UI
                 AudioManager.Instance.Apply(newAudio);
         }
 
+        public void OnBotDifficultyChanged(int index)
+        {
+            if (LocalSettings.Instance == null)
+                LocalSettings.Load();
+
+            LocalSettings.Instance.BotDifficulty = GetDifficultyKey(index);
+            LocalSettings.Save();
+
+            Debug.Log($"Bot difficulty changed to: {LocalSettings.Instance.BotDifficulty}");
+        }
+
         public void OnChangeNameClick()
         {
+            if (!HasLocalRegisteredAccount())
+            {
+                ShowMessage("Недоступно", "Смена имени доступна только для зарегистрированного аккаунта.");
+                return;
+            }
+
             ScreenRouter.Instance.Show<ChangeNameScreen>();
         }
 
         public void OnChangeEmailClick()
         {
+            if (!HasLocalRegisteredAccount())
+            {
+                ShowMessage("Недоступно", "Смена почты доступна только для зарегистрированного аккаунта.");
+                return;
+            }
+
             ScreenRouter.Instance.Show<ChangeEmailScreen>();
         }
 
-        public async void OnResetStatisticClick()
+        public void OnResetStatisticClick()
         {
-            if (AuthServiceProvider.Auth == null)
-            {
-                Debug.LogError("Сервис авторизации ещё не инициализирован.");
-                return;
-            }
-
             if (LocalPlayerData.Instance == null)
                 LocalPlayerData.Load();
 
-            var result = await AuthServiceProvider.Auth.BeginResetStatisticAsync();
-            if (!result.Success)
+            if (LocalPlayerData.Instance == null)
             {
-                Debug.LogError(result.Message);
+                ShowError("Локальные данные игрока не найдены.");
                 return;
             }
 
-            var screen = ScreenRouter.Instance.GetScreen<VerificationScreen>();
-            if (screen == null)
+            if (!HasLocalRegisteredAccount())
             {
-                Debug.LogError("VerificationScreen не найден в ScreenRouter.");
+                ShowConfirmation(
+                    "Сброс статистики",
+                    "Сбросить локальную статистику гостевого профиля? Это действие нельзя отменить.",
+                    ResetGuestStatistic,
+                    "Сбросить");
                 return;
             }
 
-            screen.Setup(
-                VerificationPurpose.ResetStatistic,
-                typeof(SettingsScreen),
-                LocalPlayerData.Instance.Email
-            );
-
-            ScreenRouter.Instance.Show<VerificationScreen>();
+            ShowConfirmation(
+                "Сброс статистики",
+                "На почту аккаунта будет отправлен код подтверждения. После подтверждения статистика и список последних игр будут сброшены локально и на сервере.",
+                BeginRegisteredStatisticReset,
+                "Отправить код");
         }
 
-        public async void OnDeleteAccountClick()
+        public void OnDeleteAccountClick()
         {
-            if (AuthServiceProvider.Auth == null)
+            if (!HasLocalRegisteredAccount())
             {
-                Debug.LogError("Сервис авторизации ещё не инициализирован.");
+                ShowMessage("Недоступно", "Удаление аккаунта доступно только для зарегистрированного пользователя.");
                 return;
             }
 
+            ShowConfirmation(
+                "Удаление аккаунта",
+                "На почту аккаунта будет отправлен код подтверждения. После подтверждения аккаунт будет удалён, а приложение вернётся к стартовому экрану.",
+                BeginRegisteredAccountDelete,
+                "Отправить код");
+        }
+
+        private void ResetGuestStatistic()
+        {
             if (LocalPlayerData.Instance == null)
                 LocalPlayerData.Load();
 
-            var result = await AuthServiceProvider.Auth.BeginDeleteAccountAsync();
-            if (!result.Success)
+            if (LocalPlayerData.Instance == null)
             {
-                Debug.LogError(result.Message);
+                ShowError("Локальные данные игрока не найдены.");
                 return;
             }
 
-            var screen = ScreenRouter.Instance.GetScreen<VerificationScreen>();
-            if (screen == null)
+            LocalPlayerData.Instance.ResetStats();
+            RefreshAccountView();
+            ShowMessage("Готово", "Локальная статистика гостевого профиля сброшена.");
+        }
+
+        private async void BeginRegisteredStatisticReset()
+        {
+            if (AuthServiceProvider.Auth == null)
             {
-                Debug.LogError("VerificationScreen не найден в ScreenRouter.");
+                ShowError("Сервис авторизации ещё не инициализирован.");
                 return;
             }
 
-            screen.Setup(
-                VerificationPurpose.DeleteAccount,
-                typeof(SettingsScreen),
-                LocalPlayerData.Instance.Email
-            );
+            if (!HasLocalRegisteredAccount())
+            {
+                ShowMessage("Недоступно", "Сброс серверной статистики доступен только для зарегистрированного аккаунта.");
+                return;
+            }
 
-            ScreenRouter.Instance.Show<VerificationScreen>();
+            SetBusy(true);
+
+            try
+            {
+                var result = await AuthServiceProvider.Auth.BeginResetStatisticAsync();
+                if (!result.Success)
+                {
+                    ShowError(Errors.ForPopup(result.Message));
+                    return;
+                }
+
+                var screen = ScreenRouter.Instance.GetScreen<VerificationScreen>();
+                if (screen == null)
+                {
+                    ShowError("Экран подтверждения кода не найден.");
+                    return;
+                }
+
+                screen.Setup(
+                    VerificationPurpose.ResetStatistic,
+                    typeof(SettingsScreen),
+                    GetAccountEmailForVerification()
+                );
+
+                ScreenRouter.Instance.Show<VerificationScreen>();
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogException(ex);
+                ShowError(Errors.FromException(ex, "Не удалось отправить код для сброса статистики. Попробуй ещё раз."));
+            }
+            finally
+            {
+                SetBusy(false);
+            }
+        }
+
+        private async void BeginRegisteredAccountDelete()
+        {
+            if (AuthServiceProvider.Auth == null)
+            {
+                ShowError("Сервис авторизации ещё не инициализирован.");
+                return;
+            }
+
+            if (!HasLocalRegisteredAccount())
+            {
+                ShowMessage("Недоступно", "Удаление аккаунта доступно только для зарегистрированного пользователя.");
+                return;
+            }
+
+            SetBusy(true);
+
+            try
+            {
+                var result = await AuthServiceProvider.Auth.BeginDeleteAccountAsync();
+                if (!result.Success)
+                {
+                    ShowError(Errors.ForPopup(result.Message));
+                    return;
+                }
+
+                var screen = ScreenRouter.Instance.GetScreen<VerificationScreen>();
+                if (screen == null)
+                {
+                    ShowError("Экран подтверждения кода не найден.");
+                    return;
+                }
+
+                screen.Setup(
+                    VerificationPurpose.DeleteAccount,
+                    typeof(SettingsScreen),
+                    GetAccountEmailForVerification()
+                );
+
+                ScreenRouter.Instance.Show<VerificationScreen>();
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogException(ex);
+                ShowError(Errors.FromException(ex, "Не удалось отправить код для удаления аккаунта. Попробуй ещё раз."));
+            }
+            finally
+            {
+                SetBusy(false);
+            }
         }
 
         public void OnBack()
         {
             ScreenRouter.Instance.Show<MainScreen>();
+        }
+
+        private string GetAccountEmailForVerification()
+        {
+            if (LocalPlayerData.Instance == null)
+                LocalPlayerData.Load();
+
+            string email = LocalPlayerData.Instance != null
+                ? LocalPlayerData.Instance.Email
+                : string.Empty;
+
+            if (string.IsNullOrWhiteSpace(email) && AuthServiceProvider.Auth != null)
+                email = AuthServiceProvider.Auth.CurrentAccountEmail;
+
+            return email ?? string.Empty;
+        }
+
+        private void SetBusy(bool value)
+        {
+            _busy = value;
+
+            if (busyOverlay != null)
+                busyOverlay.SetActive(value);
+
+            if (botDifficultyDropdown != null)
+                botDifficultyDropdown.interactable = !value;
+
+            ApplyButtonAvailability();
+        }
+
+        private void ShowConfirmation(string title, string message, System.Action onConfirm, string confirmText)
+        {
+            if (confirmationPopup != null)
+            {
+                confirmationPopup.Show(title, message, onConfirm, null, confirmText, "Отмена");
+                return;
+            }
+
+            Debug.LogError("ConfirmationPopup не назначен в SettingsScreen. Опасное действие отменено: " + title);
+            ShowError("Окно подтверждения не настроено. Действие отменено.");
+        }
+
+        private void ShowMessage(string title, string message)
+        {
+            string friendlyMessage = Errors.ForPopup(message, message);
+
+            if (messagePopup != null)
+                messagePopup.Show(title, friendlyMessage);
+            else
+                Debug.Log(friendlyMessage);
+        }
+
+        private void ShowError(string message)
+        {
+            string friendlyMessage = Errors.ForPopup(message);
+
+            if (messagePopup != null)
+                messagePopup.Show("Ошибка", friendlyMessage);
+            else
+                Debug.LogError(friendlyMessage);
+        }
+
+        private static int GetDifficultyIndex(string difficultyKey)
+        {
+            if (string.IsNullOrWhiteSpace(difficultyKey))
+                return 0;
+
+            switch (difficultyKey.Trim().ToLowerInvariant())
+            {
+                case "medium":
+                    return 1;
+
+                case "hard":
+                    return 2;
+
+                default:
+                    return 0;
+            }
+        }
+
+        private static string GetDifficultyKey(int index)
+        {
+            switch (index)
+            {
+                case 1:
+                    return "medium";
+
+                case 2:
+                    return "hard";
+
+                default:
+                    return "easy";
+            }
         }
     }
 }
